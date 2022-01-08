@@ -61,7 +61,7 @@ hotend = "e3d_v6_vol"; // [chimera_v6:Chimera Dual V6, chimera_vol:Chimera Dual 
 hotendOpt = "optimize"; // [ optimize:Optimized, universal:Universal]
 
 // What style of extruder are you using?
-extruder = "titan"; // [bowden:Bowden, titan:E3D Titan, carl_direct:Carl Feniak Direct Drive - Not ready yet.]
+extruder = "titan"; // [bowden:Bowden, titan:E3D Titan, carl_direct:Carl Feniak Direct Drive - Not ready yet., standard:Generic metal extruders]
 
 // What type of fan duct should be made?
 fanDuctStyle = "simple"; // [simple:Simple single outlet]
@@ -155,6 +155,9 @@ prusai3FanBracketDepth = 3;
 
 // How much vertical offset should be added / removed for a titan mount.
 prusai3TitanVertOffset = 15;
+
+// How much vertical offset should be added / removed for a standard metal mount.
+prusai3StandardVertOffset = 15;
 
 /* [C Bot Carriage] */
 
@@ -584,12 +587,27 @@ e3dTitanMountLowerOverlap = 15; // Amount the brace overlaps the main carriage.
 // Should a cut out be made for the extruder stepper?
 extruderStepper = "normal"; // [normal:Typical size, non-pancake, pancake:Pancake]
 
+/* [E3D Standard Metal Extruder Advanced] */
+
+// Variables for a standard metal extruder.
+e3dStandardMountMat = 4; // How much material should be around the face of the mount.
+e3dStandardMountCornerRadius = 4; // The radius of the corners for the mounting plate.
+e3dStandardMountBraceWidth = 2; // Width of the brace that stabilizes the E3D Titan and Stepper.
+e3dStandardMountBraceHeight = 5; // Height of brace.
+e3dStandardMountLowerOverlap = 0; // Amount the brace overlaps the main carriage.
+
 /* [Hidden] */
 
 // E3D Titan settings
 e3dTitanOffset = [11.1,13.5]; // This is offset of the filament path. 0 - From center of stepper shaft, 1 - From face of carrier / mount. Do not change.
 e3dTitanMountThickness = 7; // Only use the 7mm mount spacing. This allows for easier printing and provides a better thermal mass to reduce warping due to stepper overheating.
 e3dTitanFilamentSideBodyOffset = 4; // How much longer to make the mount on the side nearest the filament path.
+
+// standard metal extruder settings
+e3dStandardOffset = [8.5,14,10]; // This is offset of the filament path. 0 - From center of stepper shaft, 1 - From face of carrier / mount. Do not change.
+e3dStandardMountThickness = 10; // Only use the 7mm mount spacing. This allows for easier printing and provides a better thermal mass to reduce warping due to stepper overheating.
+e3dStandardFilamentSideBodyOffset = 4; // How much longer to make the mount on the side nearest the filament path.
+
 
 // Collision switch variables
 ylSwitchDimensions = [[25.5,5,15],[7.25,11.5,3.2,6.5,2.4]]; //[x,y,z],[hole x, hole z, hole d, nut dia, nut depth],[hole.....
@@ -1092,7 +1110,12 @@ if (carriage == "prusai3") {
      // Place the titan direct extruder if needed.
      if (realExtruder == "titan" && (prusai3Which == "hotm" || prusai3Which == "all")) {
 	  translate([heAnchorL[0], -carriageDepth, (xMountHeight + prusai3TitanVertOffset - .01)])
-	       e3d_titan_mount();
+               e3d_titan_mount();
+     }
+     // Place the titan direct extruder if needed.
+     if (realExtruder == "standard" && (prusai3Which == "hotm" || prusai3Which == "all")) {
+	  translate([heAnchorL[0], -carriageDepth, (xMountHeight + prusai3StandardVertOffset - .01)])     
+               e3d_standard_mount();
      }
 }
 
@@ -3125,6 +3148,125 @@ module cbot_x_bumper() {
      }
 }
 
+module e3d_standard_mount() {
+     // This creates the mount for a direct extruder usinmg a generic metal extruder piece.
+     // First create a large cube that is built to the size of the Nema 17 plus e3dStandardMountMat.
+     // Then remove the center portion where the Nema 17 will mount and recreate that portion to the specs
+     // for the Nema 17.
+     // Move everything around so position point is X - center of filament path, Y - face of mount on Standard side.
+     rotate([0,0,90]) {
+         translate([0,e3dStandardOffset[1],0]) {
+     translate([-(nema17OuterOffset + e3dStandardOffset[0] + e3dStandardMountMat),0,-1])
+  	  difference() {
+	  hull() {
+	       // Lower left corner
+	       translate([0, 0, (carriage == "prusai3" ? -prusai3StandardVertOffset : 0)])
+		    cube([1, (carriageDepth + heDepthOffset), 1]);
+	       
+	       // Upper left corner
+	       translate([e3dStandardMountCornerRadius,
+			  0,
+			  (nema17OuterOffset * 2) - e3dStandardMountCornerRadius + 1]) 
+		    rotate([-90,0,0])
+		    cylinder(r=e3dStandardMountCornerRadius, h=(carriageDepth + heDepthOffset), $fn=100);
+	       
+	       // Lower right corner
+	       translate([((nema17OuterOffset * 2) + (e3dStandardMountMat * 2)) + e3dStandardFilamentSideBodyOffset - 1, 0, (carriage == "prusai3" ? -prusai3StandardVertOffset : 0)])
+		    cube([1, (carriageDepth + heDepthOffset), 1]);
+	       
+	       // Upper right corner
+	       translate([(nema17OuterOffset * 2) + (e3dStandardMountMat * 2) + e3dStandardFilamentSideBodyOffset - e3dStandardMountCornerRadius,
+			  0,
+			  (nema17OuterOffset * 2) - e3dStandardMountCornerRadius + 1])
+		    rotate([-90,0,0])
+		    cylinder(r=e3dStandardMountCornerRadius, h=(carriageDepth + heDepthOffset), $fn=100);
+	  }
+     
+	  // Now remove the center where the Standard and Nema 17 will be.
+	  translate([e3dStandardMountMat, -.1, 5])
+	       cube([(nema17OuterOffset * 2) + e3dStandardFilamentSideBodyOffset, (carriageDepth + .2), (nema17OuterOffset * 2)]);
+     }
+
+     
+     // Create the bracing.
+     translate([-(nema17OuterOffset + e3dStandardOffset[0] + e3dStandardMountMat),0,-.01]) {
+	  // Left side brace
+	  hull() {
+	       // Lower left base.
+	       translate([0, 0, - (e3dStandardMountLowerOverlap + (carriage == "prusai3" ? prusai3StandardVertOffset : 0))])
+		    cube([e3dStandardMountBraceWidth, .01, .01]);
+	       
+	       // Lower left raised.
+	       translate([0, -e3dStandardMountBraceHeight + 3,  - (e3dStandardMountLowerOverlap + (carriage == "prusai3" ? prusai3StandardVertOffset : 0)) + 5])
+		    rotate([0,90,0])
+		    cylinder(r=1.5, h=e3dStandardMountBraceWidth, $fn=100);
+	       
+	       // Upper left base.
+	       translate([0,0,(nema17OuterOffset * 2) - e3dStandardMountCornerRadius - .5])
+		    cube([e3dStandardMountBraceWidth, .01, .01]);
+	       
+	       // Upper left raised.
+	       translate([0, -e3dStandardMountBraceHeight + 3, (nema17OuterOffset * 2) - e3dStandardMountCornerRadius - 5.5])
+		    rotate([0,90,0])
+		    cylinder(r=1.5, h=e3dStandardMountBraceWidth, $fn=100);
+	  }
+
+	  // Right side brace
+	  hull() {
+	       // Lower right base.
+	       translate([(nema17OuterOffset * 2) + (e3dStandardMountMat * 2) + e3dStandardFilamentSideBodyOffset - e3dStandardMountBraceWidth,
+			  0,- (e3dStandardMountLowerOverlap + (carriage == "prusai3" ? prusai3StandardVertOffset : 0))])
+		    cube([e3dStandardMountBraceWidth, .01, .01]);
+	       
+	       // Lower right raised.
+	       translate([(nema17OuterOffset * 2) + (e3dStandardMountMat * 2) + e3dStandardFilamentSideBodyOffset - e3dStandardMountBraceWidth,
+			  -e3dStandardMountBraceHeight + 3, - (e3dStandardMountLowerOverlap + (carriage == "prusai3" ? prusai3StandardVertOffset : 0)) + 5])
+		    rotate([0,90,0])
+		    cylinder(r=1.5, h=e3dStandardMountBraceWidth, $fn=100);
+	       
+	       // Upper right base.
+	       translate([(nema17OuterOffset * 2) + (e3dStandardMountMat * 2) + e3dStandardFilamentSideBodyOffset - e3dStandardMountBraceWidth,
+			  0,(nema17OuterOffset * 2) - e3dStandardMountCornerRadius - .5])
+		    cube([e3dStandardMountBraceWidth, .01, .01]);
+	       
+	       // Upper right raised.
+	       translate([(nema17OuterOffset * 2) + (e3dStandardMountMat * 2) + e3dStandardFilamentSideBodyOffset - e3dStandardMountBraceWidth,
+			  -e3dStandardMountBraceHeight + 3, (nema17OuterOffset * 2) - e3dStandardMountCornerRadius - 5.5])
+		    rotate([0,90,0])
+		    cylinder(r=1.5, h=e3dStandardMountBraceWidth, $fn=100);
+	  }
+     }
+     // Create the extra support
+     translate([-14, 1.5, (carriage == "prusai3" ? -prusai3StandardVertOffset-26 : 0)])
+        cube([19, (carriageDepth + heDepthOffset)+1.5, 35]);
+     
+     
+     // Create the face the Standard and Nema 17 will attach to.
+     difference() {
+	  translate([-(nema17OuterOffset + e3dStandardOffset[0] + .01), carriageDepth - e3dStandardMountThickness , 0])
+	       cube([(nema17OuterOffset * 2) + e3dStandardFilamentSideBodyOffset + .02, e3dStandardMountThickness, (nema17OuterOffset * 2) + .02]);
+
+	  // Carve out the holes for the Nema 17 mount.
+	  // First position ourselves in the center of the face. All other offsets
+	  // are from center of Nema 17 output shaft.
+	  translate([-e3dStandardOffset[0], carriageDepth - e3dStandardMountThickness, nema17OuterOffset]) {
+	       for (i= nema17MountHoleLocs) {
+		    translate([i[0],-.1,i[1]]) {
+			 rotate([-90,0,0])
+			      cylinder(d=nema17MountHoleDiameter, h=(e3dStandardMountThickness + .2), $fn=200);
+		    }
+	       }
+	       
+	       // Carve out the center for the Nema 17 shaft and center raised portion.
+	       translate([0,-.1,0])
+		    rotate([-90,-.1,0])
+		    cylinder(d=nema17CenterDiameter, h=(e3dStandardMountThickness + .2), $fn=200);
+		    }
+     }
+ }
+ }
+}
+
 module e3d_titan_mount() {
      // This creates the mount for the E3D Titan extruder.
      // First create a large cube that is built to the size of the Nema 17 plus e3dTitanMountMat.
@@ -3232,7 +3374,7 @@ module e3d_titan_mount() {
 		    rotate([-90,-.1,0])
 		    cylinder(d=nema17CenterDiameter, h=(e3dTitanMountThickness + .2), $fn=200);
 		    }
-     }     
+     }
 }
 
 module bltouch_mount(carriageDepth,cbot=false) {
